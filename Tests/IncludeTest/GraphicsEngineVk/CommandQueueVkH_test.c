@@ -49,5 +49,7 @@ void TestCommandQueueVk_CInterface(ICommandQueueVk* pQueue)
 
     ICommandQueueVk_WaitForIdle(pQueue);
 
-    ICommandQueueVk_SignalFence(pQueue, (VkFence)NULL);
+    ICommandQueueVk_EnqueueSignal(pQueue, (VkFence)NULL);
+
+    ICommandQueueVk_EnqueueSignalSemaphore(pQueue, (VkSemaphore)NULL, (Uint64)0);
 }

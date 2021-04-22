@@ -2106,9 +2106,9 @@ DILIGENT_BEGIN_INTERFACE(IDeviceContext, IObject)
     /// \param [in] pFence - The fence to signal
     /// \param [in] Value  - The value to set the fence to. This value must be greater than the
     ///                      previously signaled value on the same fence.
-    VIRTUAL void METHOD(SignalFence)(THIS_
-                                     IFence*    pFence,
-                                     Uint64     Value) PURE;
+    VIRTUAL void METHOD(EnqueueSignal)(THIS_
+                                       IFence*    pFence,
+                                       Uint64     Value) PURE;
     
 
     /// Waits until the specified fence reaches or exceeds the specified value, on the device.
@@ -2116,7 +2116,15 @@ DILIGENT_BEGIN_INTERFACE(IDeviceContext, IObject)
     /// \param [in] pFence - The fence to wait.
     /// \param [in] Value  - The value that the context is waiting for the fence to reach.
     /// 
-    /// \remarks    Wait is only allowed for immediate contexts.
+    /// \note  If NativeFence feature is not enabled (see Diligent::DeviceFeatures) then
+    ///        Value must be less than or equal to the last signaled or pending value.
+    ///        Value is become pending when context is flushed.
+    ///        Waiting for a value that is greater than any pending value will cause a deadlock.
+    /// 
+    /// \note  If NativeFence feature is enabled then waiting for a value that is greater than
+    ///        any pending value will cause a GPU stall.
+    ///
+    /// \remarks  Wait is only allowed for immediate contexts.
     VIRTUAL void METHOD(DeviceWaitForFence)(THIS_
                                             IFence*  pFence,
                                             Uint64   Value) PURE;

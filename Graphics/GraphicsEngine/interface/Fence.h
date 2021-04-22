@@ -74,18 +74,17 @@ DILIGENT_BEGIN_INTERFACE(IFence, IDeviceObject)
     VIRTUAL Uint64 METHOD(GetCompletedValue)(THIS) PURE;
 
 
-    /// Resets the fence to the specified value.
+    /// Sets the fence to the specified value.
     
-    /// \param [in] Value - New value to reset the fence to.
+    /// \param [in] Value - New value to set the fence to.
+    ///                     Value must be greater than the current value of the fence.
     /// 
-    /// \note  Fence value will be changed immediatlly on the CPU side,
-    ///        use ICommandQueueVk::SignalFence or ICommandQueueD3D12::SignalFence to add signal command
+    /// \note  Fence value will be changed immediatlly on the CPU side, use IDeviceContext::EnqueueSignal() to add signal command
     ///        to the queue, value will be changed when all previously submitted commands will be completed.
     /// 
-    /// \warning  Only Direct3D12 and Vulkan backends can wait on the GPU-side for signal from CPU side.
-    ///           Vulkan backend additionally requires timeline semaphore extension.
-    VIRTUAL void METHOD(Reset)(THIS_
-                               Uint64 Value) PURE;
+    /// \note  Requires NativeFence feature, see Diligent::DeviceFeatures.
+    VIRTUAL void METHOD(Signal)(THIS_
+                                Uint64 Value) PURE;
     
 
     /// Waits until the specified fence reaches or exceeds the specified value, on the host.
