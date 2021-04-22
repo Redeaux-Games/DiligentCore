@@ -160,7 +160,7 @@ function(set_common_target_properties TARGET)
 
             # It is crucial to set CXX_STANDARD flag to only affect c++ files and avoid failures compiling c-files:
             # error: invalid argument '-std=c++11' not allowed with 'C/ObjC'
-            CXX_STANDARD 11
+            CXX_STANDARD 14
             CXX_STANDARD_REQUIRED ON
 
             C_STANDARD 11
