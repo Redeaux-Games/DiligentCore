@@ -81,6 +81,9 @@ DILIGENT_BEGIN_INTERFACE(IFence, IDeviceObject)
     /// \note  Fence value will be changed immediatlly on the CPU side,
     ///        use ICommandQueueVk::SignalFence or ICommandQueueD3D12::SignalFence to add signal command
     ///        to the queue, value will be changed when all previously submitted commands will be completed.
+    /// 
+    /// \warning  Only Direct3D12 and Vulkan backends can wait on the GPU-side for signal from CPU side.
+    ///           Vulkan backend additionally requires timeline semaphore extension.
     VIRTUAL void METHOD(Reset)(THIS_
                                Uint64 Value) PURE;
     

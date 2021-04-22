@@ -70,6 +70,10 @@ DILIGENT_BEGIN_INTERFACE(ICommandQueueVk, IObject)
                                      const VkPresentInfoKHR REF PresentInfo) PURE;
 
     /// Returns Vulkan command queue. May return VK_NULL_HANDLE if queue is anavailable
+    ///
+    /// \warning  Access to the VkQueue must be externally synchronized.
+    ///           Don't use this method to submit commands directly, use SubmitCmdBuffer() or Submit()
+    ///           which is safe.
     VIRTUAL VkQueue METHOD(GetVkQueue)(THIS) PURE;
 
     /// Returns vulkan command queue family index
@@ -86,10 +90,11 @@ DILIGENT_BEGIN_INTERFACE(ICommandQueueVk, IObject)
     /// Signals the given fence
     VIRTUAL void METHOD(SignalFence)(THIS_
                                      VkFence vkFence) PURE;
+
     /// Signals the given timeline semaphore
     VIRTUAL void METHOD(SignalSemaphore)(THIS_
-                                     VkSemaphore vkSemaphore, uint64_t value) PURE;
-
+                                         VkSemaphore vkTimelineSemaphore,
+                                         Uint64      Value) PURE;
 };
 DILIGENT_END_INTERFACE
 
@@ -108,6 +113,7 @@ DILIGENT_END_INTERFACE
 #    define ICommandQueueVk_GetCompletedFenceValue(This) CALL_IFACE_METHOD(CommandQueueVk, GetCompletedFenceValue, This)
 #    define ICommandQueueVk_WaitForIdle(This)            CALL_IFACE_METHOD(CommandQueueVk, WaitForIdle,            This)
 #    define ICommandQueueVk_SignalFence(This, ...)       CALL_IFACE_METHOD(CommandQueueVk, SignalFence,            This, __VA_ARGS__)
+#    define ICommandQueueVk_SignalSemaphore(This, ...)   CALL_IFACE_METHOD(CommandQueueVk, SignalSemaphore,        This, __VA_ARGS__)
 
 // clang-format on
 

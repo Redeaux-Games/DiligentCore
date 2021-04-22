@@ -49,11 +49,20 @@ FenceVkImpl::FenceVkImpl(IReferenceCounters* pRefCounters,
     }
 // clang-format on
 {
+    const auto& LogicalDevice = pRendeDeviceVkImpl->GetLogicalDevice();
+    if (LogicalDevice.GetEnabledExtFeatures().TimelineSemaphore.timelineSemaphore == VK_TRUE)
+    {
+        m_TimelineSemaphore = LogicalDevice.CreateTimelineSemaphore(0, m_Desc.Name);
+    }
 }
 
 FenceVkImpl::~FenceVkImpl()
 {
-    if (!m_SyncPoints.empty())
+    if (IsTimelineSemaphore())
+    {
+        VERIFY_EXPR(m_SyncPoints.empty());
+    }
+    else if (!m_SyncPoints.empty())
     {
         LOG_INFO_MESSAGE("FenceVkImpl::~FenceVkImpl(): waiting for ", m_SyncPoints.size(), " pending Vulkan ",
                          (m_SyncPoints.size() > 1 ? "fences." : "fence."));
@@ -66,12 +75,25 @@ FenceVkImpl::~FenceVkImpl()
 
 Uint64 FenceVkImpl::GetCompletedValue()
 {
-    std::lock_guard<std::mutex> Lock{m_Guard};
-    return InternalGetCompletedValue();
+    if (IsTimelineSemaphore())
+    {
+        const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
+        Uint64      SemaphoreCounter;
+        auto        err = LogicalDevice.GetSemaphoreCounter(m_TimelineSemaphore, &SemaphoreCounter);
+        DEV_CHECK_ERR(err == VK_SUCCESS, "Failed to get timeline semaphore counter");
+        return SemaphoreCounter;
+    }
+    else
+    {
+        std::lock_guard<std::mutex> Lock{m_SyncPointsGuard};
+        return InternalGetCompletedValue();
+    }
 }
 
 Uint64 FenceVkImpl::InternalGetCompletedValue()
 {
+    VERIFY_EXPR(!IsTimelineSemaphore());
+
     const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
     while (!m_SyncPoints.empty())
     {
@@ -89,50 +111,110 @@ Uint64 FenceVkImpl::InternalGetCompletedValue()
         }
     }
 
+#ifdef DILIGENT_DEVELOPMENT
+    // Fence may some times be used for GPU sync, so set flag only when fence has pending sync points.
+    if (m_SyncPoints.empty())
+        m_dvpUsedForGPUSync = false;
+#endif
+
     return m_LastCompletedFenceValue.load();
 }
 
 void FenceVkImpl::Reset(Uint64 Value)
 {
-    DEV_CHECK_ERR(Value >= m_LastCompletedFenceValue.load(), "Resetting fence '", m_Desc.Name, "' to the value (", Value, ") that is smaller than the last completed value (", m_LastCompletedFenceValue, ")");
-    UpdateLastCompletedFenceValue(Value);
-}
+    if (IsTimelineSemaphore())
+    {
+        const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
 
-VkSemaphore FenceVkImpl::GetVkSemaphore()
-{
-    return m_Semaphore;
+        VkSemaphoreSignalInfo SignalInfo = {};
+        SignalInfo.sType                 = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO;
+        SignalInfo.pNext                 = nullptr;
+        SignalInfo.semaphore             = m_TimelineSemaphore;
+        SignalInfo.value                 = Value;
+
+        auto err = LogicalDevice.SignalSemaphore(SignalInfo);
+        DEV_CHECK_ERR(err == VK_SUCCESS, "Failed to signal timeline semaphore");
+    }
+    else
+    {
+        std::lock_guard<std::mutex> Lock{m_SyncPointsGuard};
+
+        DEV_CHECK_ERR(!m_dvpUsedForGPUSync, "Reseting fence that used for synchronization between queues is very dangerous, it may cause data race or deadlock.");
+        DEV_CHECK_ERR(Value >= m_LastCompletedFenceValue.load(), "Resetting fence '", m_Desc.Name, "' to the value (", Value, ") that is smaller than the last completed value (", m_LastCompletedFenceValue, ")");
+        UpdateLastCompletedFenceValue(Value);
+    }
 }
 
 void FenceVkImpl::Wait(Uint64 Value)
 {
-    std::lock_guard<std::mutex> Lock{m_Guard};
-
-    const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
-    while (!m_SyncPoints.empty())
+    if (IsTimelineSemaphore())
     {
-        auto& Item = m_SyncPoints.front();
-        if (Item.Value > Value)
-            break;
+        const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
 
-        VkFence Fence  = Item.SyncPoint->GetFence();
-        auto    status = LogicalDevice.GetFenceStatus(Fence);
-        if (status == VK_NOT_READY)
+        VkSemaphoreWaitInfo WaitInfo = {};
+        WaitInfo.sType               = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+        WaitInfo.pNext               = nullptr;
+        WaitInfo.flags               = 0;
+        WaitInfo.semaphoreCount      = 1;
+        WaitInfo.pSemaphores         = &m_TimelineSemaphore;
+        WaitInfo.pValues             = &Value;
+
+        auto err = LogicalDevice.WaitSemaphores(WaitInfo, UINT64_MAX);
+        DEV_CHECK_ERR(err == VK_SUCCESS, "Timeline Semaphore Unknown Error");
+    }
+    else
+    {
+        std::lock_guard<std::mutex> Lock{m_SyncPointsGuard};
+
+        const auto& LogicalDevice = m_pDevice->GetLogicalDevice();
+        while (!m_SyncPoints.empty())
         {
-            status = LogicalDevice.WaitForFences(1, &Fence, VK_TRUE, UINT64_MAX);
+            auto& Item = m_SyncPoints.front();
+            if (Item.Value > Value)
+                break;
+
+            VkFence Fence  = Item.SyncPoint->GetFence();
+            auto    status = LogicalDevice.GetFenceStatus(Fence);
+            if (status == VK_NOT_READY)
+            {
+                status = LogicalDevice.WaitForFences(1, &Fence, VK_TRUE, UINT64_MAX);
+            }
+
+            DEV_CHECK_ERR(status == VK_SUCCESS, "All pending fences must now be complete!");
+            UpdateLastCompletedFenceValue(Item.Value);
+
+            m_SyncPoints.pop_front();
         }
 
-        DEV_CHECK_ERR(status == VK_SUCCESS, "All pending fences must now be complete!");
-        UpdateLastCompletedFenceValue(Item.Value);
-
-        m_SyncPoints.pop_front();
+#ifdef DILIGENT_DEVELOPMENT
+        // Fence may some times be used for GPU sync, so set flag only when fence has pending sync points.
+        if (m_SyncPoints.empty())
+            m_dvpUsedForGPUSync = false;
+#endif
     }
 }
 
 VulkanUtilities::VulkanRecycledSemaphore FenceVkImpl::ExtractSignalSemaphore(CommandQueueIndex CommandQueueId, Uint64 Value)
 {
-    std::lock_guard<std::mutex> Lock{m_Guard};
+    if (IsTimelineSemaphore())
+    {
+        UNEXPECTED("Not supported when timeline semaphore is used");
+        return {};
+    }
+
+    std::lock_guard<std::mutex> Lock{m_SyncPointsGuard};
 
     VulkanUtilities::VulkanRecycledSemaphore Result;
+
+#ifdef DILIGENT_DEVELOPMENT
+    if (!m_SyncPoints.empty())
+    {
+        DEV_CHECK_ERR(Value <= m_SyncPoints.back().Value,
+                      "Can not wait on value (", Value, ") which is greater than last signaled value (", m_SyncPoints.back().Value,
+                      "). This will cause a deadlock. Use timeline semaphore to avoid this.");
+    }
+    m_dvpUsedForGPUSync = true;
+#endif
 
     // Find last non-null semaphore
     for (auto Iter = m_SyncPoints.begin(); Iter != m_SyncPoints.end(); ++Iter)
@@ -167,13 +249,24 @@ VulkanUtilities::VulkanRecycledSemaphore FenceVkImpl::ExtractSignalSemaphore(Com
 
 void FenceVkImpl::AddPendingSyncPoint(CommandQueueIndex CommandQueueId, Uint64 Value, SyncPointVkPtr SyncPoint)
 {
-    std::lock_guard<std::mutex> Lock{m_Guard};
+    if (IsTimelineSemaphore())
+    {
+        UNEXPECTED("Not supported when timeline semaphore is used");
+        return;
+    }
+    if (SyncPoint == nullptr)
+    {
+        UNEXPECTED("SyncPoint is null");
+        return;
+    }
+
+    std::lock_guard<std::mutex> Lock{m_SyncPointsGuard};
 
 #ifdef DILIGENT_DEVELOPMENT
     if (!m_SyncPoints.empty())
     {
         DEV_CHECK_ERR(Value > m_SyncPoints.back().Value,
-                      "New value for fence (", Value, ") must be greater than previous value (", m_SyncPoints.back().Value, ")");
+                      "New value (", Value, ") must be greater than previous value (", m_SyncPoints.back().Value, ")");
 
         DEV_CHECK_ERR(m_SyncPoints.back().SyncPoint->GetCommandQueueId() == CommandQueueId,
                       "Fence enqueued for signal operation in command queue (", CommandQueueId,
@@ -185,7 +278,7 @@ void FenceVkImpl::AddPendingSyncPoint(CommandQueueIndex CommandQueueId, Uint64 V
     // Remove already completed sync points
     if (m_SyncPoints.size() > RequiredArraySize)
     {
-        (void)(InternalGetCompletedValue());
+        (void)InternalGetCompletedValue();
     }
 
     VERIFY(m_SyncPoints.size() < RequiredArraySize * 2, "array of sync points is too big, none of the GetCompletedValue(), Wait() or ExtractSignalSemaphore() are used");
