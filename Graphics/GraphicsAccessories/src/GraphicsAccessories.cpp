@@ -1398,6 +1398,7 @@ ADAPTER_VENDOR VendorIdToAdapterVendor(Uint32 VendorId)
         case 0x01414: return ADAPTER_VENDOR_MSFT;
         case 0x0106B: return ADAPTER_VENDOR_APPLE;
         case 0x10005: return ADAPTER_VENDOR_MESA;
+        case 0x014e4: return ADAPTER_VENDOR_BROADCOM;
         default:
             return ADAPTER_VENDOR_UNKNOWN;
     }
@@ -1728,7 +1729,6 @@ String GetContextTypeString(CONTEXT_TYPE Type)
     if ((Type & CONTEXT_TYPE_TRANSFER) == CONTEXT_TYPE_TRANSFER)
         return "TRANSFER" + Result;
 
-    UNEXPECTED("Unexpected context type");
     return "Unknown context type";
 }
 

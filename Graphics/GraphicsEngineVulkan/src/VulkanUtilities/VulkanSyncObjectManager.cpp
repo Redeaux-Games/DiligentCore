@@ -34,6 +34,7 @@ VulkanSyncObjectManager::VulkanSyncObjectManager(VulkanLogicalDevice& LogicalDev
     m_LogicalDevice{LogicalDevice}
 {
     m_SemaphorePool.reserve(64);
+    m_FencePool.reserve(32);
 }
 
 VulkanSyncObjectManager::~VulkanSyncObjectManager()
@@ -72,7 +73,8 @@ void VulkanSyncObjectManager::CreateSemaphores(VulkanRecycledSemaphore* pSemapho
     }
 
     // Create new semaphores.
-    VkSemaphoreCreateInfo SemCI = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    VkSemaphoreCreateInfo SemCI{};
+    SemCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
     for (; i < Count; ++i)
     {
@@ -96,9 +98,10 @@ VulkanRecycledFence VulkanSyncObjectManager::CreateFence()
         }
     }
 
-    VkFenceCreateInfo FenceCI = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    VkFenceCreateInfo FenceCI = {};
     VkFence           vkFence = VK_NULL_HANDLE;
 
+    FenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     vkCreateFence(m_LogicalDevice.GetVkDevice(), &FenceCI, nullptr, &vkFence);
 
     return VulkanRecycledFence{shared_from_this(), vkFence};

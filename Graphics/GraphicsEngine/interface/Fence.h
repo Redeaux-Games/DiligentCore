@@ -106,7 +106,7 @@ DILIGENT_END_INTERFACE
 #    define IFence_GetDesc(This) (const struct FenceDesc*)IDeviceObject_GetDesc(This)
 
 #    define IFence_GetCompletedValue(This) CALL_IFACE_METHOD(Fence, GetCompletedValue, This)
-#    define IFence_Reset(This, ...)        CALL_IFACE_METHOD(Fence, Reset,             This, __VA_ARGS__)
+#    define IFence_Signal(This, ...)       CALL_IFACE_METHOD(Fence, Signal,            This, __VA_ARGS__)
 #    define IFence_Wait(This, ...)         CALL_IFACE_METHOD(Fence, Wait,              This, __VA_ARGS__)
 
 // clang-format on
