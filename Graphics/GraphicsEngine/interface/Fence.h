@@ -39,8 +39,33 @@ static const INTERFACE_ID IID_Fence =
     {0x3b19184d, 0x32ab, 0x4701, {0x84, 0xf4, 0x9a, 0xc, 0x3, 0xae, 0x16, 0x72}};
 
 // clang-format off
+
+/// Describes the fence type.
+
+/// This enumeration is used by FenceDesc structure.
+DILIGENT_TYPED_ENUM(FENCE_TYPE, Uint8)
+{
+    /// Fence can be used for:
+    ///  - signaling on GPU side
+    ///  - waiting on CPU side
+    FENCE_TYPE_CPU_WAIT_ONLY = 0,
+
+    /// Fence can be used for:
+    ///  - waiting on CPU side
+    ///  - waiting on GPU side
+    ///  - signaling on GPU side
+    /// Additional usege if NativeFence feature is enabled (see Diligent::DeviceFeatures):
+    ///  - signaling on CPU side
+    ///  - waiting on GPU side for value that will be enqueued for signal later
+    FENCE_TYPE_GENERAL = 1,
+
+    FENCE_TYPE_LAST = FENCE_TYPE_GENERAL
+};
+
 /// Fence description
 struct FenceDesc DILIGENT_DERIVE(DeviceObjectAttribs)
+
+    FENCE_TYPE Type DEFAULT_INITIALIZER(FENCE_TYPE_CPU_WAIT_ONLY);
 };
 typedef struct FenceDesc FenceDesc;
 
@@ -57,8 +82,10 @@ typedef struct FenceDesc FenceDesc;
 
 /// Defines the methods to manipulate a fence object
 ///
-/// \remarks When a fence that was previously signaled by IDeviceContext::SignalFence() is destroyed,
+/// \remarks When a fence that was previously signaled by IDeviceContext::EnqueueSignal() is destroyed,
 ///          it may block the GPU until all prior commands have completed execution.
+/// 
+/// \remarks In Direct3D12 and Vulkan backend fence is thread safe.
 DILIGENT_BEGIN_INTERFACE(IFence, IDeviceObject)
 {
 #if DILIGENT_CPP_INTERFACE
@@ -68,9 +95,10 @@ DILIGENT_BEGIN_INTERFACE(IFence, IDeviceObject)
 
     /// Returns the last completed value signaled by the GPU
 
-    /// \remarks This method is not thread safe (even if the fence object is protected by mutex)
-    ///          and must only be called by the same thread that signals the fence via
-    ///          IDeviceContext::SignalFence().
+    /// \remarks Direct3D11 backend:
+    ///            This method is not thread safe (even if the fence object is protected by mutex)
+    ///            and must only be called by the same thread that signals the fence via
+    ///            IDeviceContext::EnqueueSignal().
     VIRTUAL Uint64 METHOD(GetCompletedValue)(THIS) PURE;
 
 
@@ -82,7 +110,7 @@ DILIGENT_BEGIN_INTERFACE(IFence, IDeviceObject)
     /// \note  Fence value will be changed immediatlly on the CPU side, use IDeviceContext::EnqueueSignal() to add signal command
     ///        to the queue, value will be changed when all previously submitted commands will be completed.
     /// 
-    /// \note  Requires NativeFence feature, see Diligent::DeviceFeatures.
+    /// \note  Fence must be created with type FENCE_TYPE_GENERAL.
     VIRTUAL void METHOD(Signal)(THIS_
                                 Uint64 Value) PURE;
     
