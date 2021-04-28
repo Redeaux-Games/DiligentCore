@@ -153,6 +153,14 @@ void ValidateTextureDesc(const TextureDesc& Desc) noexcept(false)
     {
         LOG_TEXTURE_ERROR_AND_THROW("CommandQueueMask (0x", std::hex, Desc.CommandQueueMask, ") must contains bit at index InitialCommandQueueId (", Uint32{Desc.InitialCommandQueueId}, ")");
     }
+
+    if (Desc.Usage == USAGE_DYNAMIC &&
+        PlatformMisc::CountOneBits(Desc.CommandQueueMask) > 1)
+    {
+        // Dynamic texture will use implicit state transition which is uses global state.
+        // When resource is used in multiple contexts resource state in transition may differ with current resource state.
+        LOG_TEXTURE_ERROR_AND_THROW("Usage is USAGE_DYNAMIC, CommandQueueMask has more than one bit.");
+    }
 }
 
 

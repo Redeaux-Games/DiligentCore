@@ -115,6 +115,17 @@ void ValidateBufferDesc(const BufferDesc& Desc, const DeviceMemoryInfo& memoryIn
 
     VERIFY_BUFFER((Desc.CommandQueueMask & (Uint64{1} << Desc.InitialCommandQueueId)) != 0,
                   "CommandQueueMask (0x", std::hex, Desc.CommandQueueMask, ") must contains bit at index InitialCommandQueueId (", Uint32{Desc.InitialCommandQueueId}, ")");
+
+    if (Desc.Usage == USAGE_DYNAMIC &&
+        (Desc.BindFlags & (BIND_UNORDERED_ACCESS | BIND_SHADER_RESOURCE)) != 0 &&
+        PlatformMisc::CountOneBits(Desc.CommandQueueMask) > 1)
+    {
+        // Dynamic buffer will use implicit state transition which is uses global state.
+        // When resource is used in multiple contexts resource state in transition may differ with current resource state.
+        LOG_BUFFER_ERROR_AND_THROW("Usage is USAGE_DYNAMIC, "
+                                   "BindFlags contains BIND_UNORDERED_ACCESS or BIND_SHADER_RESOURCE, ",
+                                   "CommandQueueMask has more than one bit.");
+    }
 }
 
 void ValidateBufferInitData(const BufferDesc& Desc, const BufferData* pBuffData) noexcept(false)
