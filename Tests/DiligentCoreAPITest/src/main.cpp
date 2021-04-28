@@ -127,6 +127,10 @@ int main(int argc, char** argv)
         {
             TestEnvCI.ForceNonSeparablePrograms = true;
         }
+        else if (strcmp(arg, "--no_native_fence") == 0)
+        {
+            TestEnvCI.DisableNativeFence = true;
+        }
     }
 
     if (TestEnvCI.deviceType == RENDER_DEVICE_TYPE_UNDEFINED)

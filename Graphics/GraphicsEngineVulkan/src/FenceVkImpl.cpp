@@ -49,8 +49,7 @@ FenceVkImpl::FenceVkImpl(IReferenceCounters* pRefCounters,
     }
 // clang-format on
 {
-    if (m_Desc.Type == FENCE_TYPE_GENERAL &&
-        pRendeDeviceVkImpl->GetDeviceCaps().Features.NativeFence)
+    if (pRendeDeviceVkImpl->GetDeviceCaps().Features.NativeFence)
     {
         const auto& LogicalDevice = pRendeDeviceVkImpl->GetLogicalDevice();
         m_TimelineSemaphore       = LogicalDevice.CreateTimelineSemaphore(0, m_Desc.Name);

@@ -154,6 +154,9 @@ TestingEnvironment::TestingEnvironment(const CreateInfo& CI, const SwapChainDesc
     std::vector<GraphicsAdapterInfo> Adapters;
     std::vector<ContextCreateInfo>   ContextCI;
 
+    DeviceFeatures Features{DEVICE_FEATURE_STATE_OPTIONAL};
+    Features.NativeFence = CI.DisableNativeFence ? DEVICE_FEATURE_STATE_DISABLED : DEVICE_FEATURE_STATE_OPTIONAL;
+
     auto EnumerateAdapters = [&Adapters](IEngineFactory* pFactory, Version MinVersion) //
     {
         Uint32 NumAdapters = 0;
@@ -248,7 +251,7 @@ TestingEnvironment::TestingEnvironment(const CreateInfo& CI, const SwapChainDesc
             EngineD3D11CreateInfo CreateInfo;
             CreateInfo.GraphicsAPIVersion   = Version{11, 0};
             CreateInfo.DebugMessageCallback = MessageCallback;
-            CreateInfo.Features             = DeviceFeatures{DEVICE_FEATURE_STATE_OPTIONAL};
+            CreateInfo.Features             = Features;
 #    ifdef DILIGENT_DEVELOPMENT
             CreateInfo.SetValidationLevel(VALIDATION_LEVEL_2);
 #    endif
@@ -307,7 +310,7 @@ TestingEnvironment::TestingEnvironment(const CreateInfo& CI, const SwapChainDesc
             CreateInfo.SetValidationLevel(VALIDATION_LEVEL_1);
 
             CreateInfo.DebugMessageCallback = MessageCallback;
-            CreateInfo.Features             = DeviceFeatures{DEVICE_FEATURE_STATE_OPTIONAL};
+            CreateInfo.Features             = Features;
 
             LOG_INFO_MESSAGE("Found ", Adapters.size(), " compatible adapters");
             for (Uint32 i = 0; i < Adapters.size(); ++i)
@@ -374,7 +377,7 @@ TestingEnvironment::TestingEnvironment(const CreateInfo& CI, const SwapChainDesc
 
             CreateInfo.DebugMessageCallback      = MessageCallback;
             CreateInfo.Window                    = Window;
-            CreateInfo.Features                  = DeviceFeatures{DEVICE_FEATURE_STATE_OPTIONAL};
+            CreateInfo.Features                  = Features;
             CreateInfo.ForceNonSeparablePrograms = CI.ForceNonSeparablePrograms;
             NumDeferredCtx                       = 0;
             ppContexts.resize(std::max(size_t{1}, ContextCI.size()) + NumDeferredCtx);
@@ -417,7 +420,7 @@ TestingEnvironment::TestingEnvironment(const CreateInfo& CI, const SwapChainDesc
             CreateInfo.UploadHeapPageSize        = 32 * 1024;
             //CreateInfo.DeviceLocalMemoryReserveSize = 32 << 20;
             //CreateInfo.HostVisibleMemoryReserveSize = 48 << 20;
-            CreateInfo.Features = DeviceFeatures{DEVICE_FEATURE_STATE_OPTIONAL};
+            CreateInfo.Features = Features;
 
             NumDeferredCtx                 = CI.NumDeferredContexts;
             CreateInfo.NumDeferredContexts = NumDeferredCtx;
